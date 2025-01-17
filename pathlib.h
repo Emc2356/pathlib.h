@@ -26,7 +26,7 @@ SOFTWARE.
 * it can be compiled with a lot of different compilers. Pathlib only
 * operates on "normal" paths, aka not extra long paths that are generated
 * by some sort of dynamic allocation. Since it is a headers only library
-* to get the implementations you msut define PATHLIB_IMPLEMENTATION.
+* to get the implementations you must define PATHLIB_IMPLEMENTATION.
 *
 * @copyright MIT license
 */
