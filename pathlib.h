@@ -1,35 +1,35 @@
 /*
-Copyright (c) 2025 Stamelos Vasilis
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+ * Copyright (c) 2025 Stamelos Vasilis
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is furnished to do
+ * so, subject to the following conditions:
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 
 /**
-* @file pathlib.h
-* @brief a simple library for path manipulation
-*
-* pathlib is a headers only library that aims to simplify interactions
-* with the filesystem while keeping it simple. It is written in C89 so
-* it can be compiled with a lot of different compilers. Pathlib only
-* operates on "normal" paths, aka not extra long paths that are generated
-* by some sort of dynamic allocation. Since it is a headers only library
-* to get the implementations you must define PATHLIB_IMPLEMENTATION.
-*
-* @copyright MIT license
-*/
+ * @file pathlib.h
+ * @brief a simple library for path manipulation
+ *
+ * pathlib is a headers only library that aims to simplify interactions
+ * with the filesystem while keeping it simple. It is written in C89 so
+ * it can be compiled with a lot of different compilers. Pathlib only
+ * operates on "normal" paths, aka not extra long paths that are generated
+ * by some sort of dynamic allocation. Since it is a headers only library
+ * to get the implementations you must define PATHLIB_IMPLEMENTATION.
+ *
+ * @copyright MIT license
+ */
 
 #ifndef _PATHLIB_C_H_
 #define _PATHLIB_C_H_
@@ -41,10 +41,12 @@ SOFTWARE.
 #include <limits.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <wctype.h>
 
 #ifdef _WIN32
     #include <windows.h>
     #include <shellapi.h>
+    #include <shlwapi.h>
 
     #define PATHLIB_MAX_PATH MAX_PATH
 #else
@@ -66,14 +68,14 @@ SOFTWARE.
 
 #ifndef PATHLIB_MALLOC
 /**
-* @brief the function that it will use to allocate memory
-* @note if PATHLIB_MALLOC is defined then #PATHLIB_FREE(ptr) must be defined too
-* @note it is recommended to use a temperory allocator because pathlib deals with a lot of small strings
-*/
+ * @brief the function that it will use to allocate memory
+ * @note if PATHLIB_MALLOC is defined then #PATHLIB_FREE(ptr) must be defined too
+ * @note it is recommended to use a temperory allocator because pathlib deals with a lot of small strings
+ */
 #define PATHLIB_MALLOC(sz) malloc(sz)
 /**
-* @brief the function that it will use to free the pointer that it got from #PATHLIB_MALLOC(sz)
-* @note if #PATHLIB_MALLOC(sz) refers to a temperory allocator then PATHLIB_FREE should be defined as an empty function like marco
+ * @brief the function that it will use to free the pointer that it got from #PATHLIB_MALLOC(sz)
+ * @note if #PATHLIB_MALLOC(sz) refers to a temperory allocator then PATHLIB_FREE should be defined as an empty function like marco
 */
 #define PATHLIB_FREE(ptr) free(ptr)
 #endif /* PATHLIB_MALLOC */
@@ -84,8 +86,8 @@ SOFTWARE.
 
 #ifndef PATHLIB_API
 /**
-* @brief redefine this macro to add a custom "attributes" to every function, eg static inline
-*/
+ * @brief redefine this macro to add a custom "attributes" to every function, eg static inline
+ */
 #define PATHLIB_API
 #endif /* PATHLIB_API */
 
@@ -107,7 +109,7 @@ typedef struct Path {
  * @brief a dynamic array for paths.
  *
  * @struct Paths
- * @see Path
+ * @see Path pathlib_paths_add pathlib_paths_pop pathlib_paths_free
  */
 typedef struct Paths {
     Path* paths;     /**< the paths that it holds */
@@ -154,358 +156,384 @@ typedef enum Pathlib_Error {
 /**
  * @brief a variable that represents a possible error after a function call.
  *
+ * if a function is supposed to set this variable then it will reset it
+ * first with PATHLIB_NONE
+ *
  * @see Pathlib_Error
  */
 extern Pathlib_Error pathlib_error;
 
 /**
-* @brief constructs a Path object from a string
-*
-* @param str the string that it will convert
-* @return a path object that represents the input path
-* @warning str must not be `NULL`
-*/
+ * @brief constructs a Path object from a string
+ *
+ * @param str the string that it will convert
+ * @return a path object that represents the input path
+ * @warning str must not be `NULL`
+ */
 PATHLIB_API Path pathlib_from_str(const char* str);
 /**
-* @brief adds a new part to the path object
-*
-* @param path the path that it will add the part to
-* @param part the new part that it will append
-* @warning path and part must not be `NULL`
-*/
+ * @brief adds a new part to the path object
+ *
+ * @param path the path that it will add the part to
+ * @param part the new part that it will append
+ * @warning path and part must not be `NULL`
+ */
 PATHLIB_API void pathlib_add_part(Path* path, const char* part);
 /**
-* @brief copies the input path into a new
-*
-* @param path the path that it will copy
-* @return a copy of the input path
-* @warning path must not be `NULL`
-*/
+ * @brief copies the input path into a new
+ *
+ * @param path the path that it will copy
+ * @return a copy of the input path
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API Path pathlib_copy(const Path* path);
 /**
-* @brief creates a path that represents the current working directory
-*
-* @return a path object that represents the current working directory
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @see Pathlib_Error
-*/
+ * @brief creates a path that represents the current working directory
+ *
+ * @return a path object that represents the current working directory
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @see Pathlib_Error
+ */
 PATHLIB_API Path pathlib_cwd(void);
 /**
-* @brief creates a path that represents the path to the home folder
-*
-* @return a path object that represents the path to the home folder
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @see Pathlib_Error
-*/
+ * @brief creates a path that represents the path to the home folder
+ *
+ * @return a path object that represents the path to the home folder
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @see Pathlib_Error
+ */
 PATHLIB_API Path pathlib_home(void);
 /**
-* @brief creates a path that represents the path to the temp folder
-*
-* @return a path object that represents the path to the temp folder
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @see Pathlib_Error
-*/
+ * @brief creates a path that represents the path to the temp folder
+ *
+ * @return a path object that represents the path to the temp folder
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @see Pathlib_Error
+ */
 PATHLIB_API Path pathlib_temp(void);
 /**
-* @brief deallocated a Path struct and zero it out
-*
-* @param path the path that it will clean up 
-* @warning path must not be `NULL`
-*/
+ * @brief deallocated a Path struct and zero it out
+ *
+ * @param path the path that it will clean up 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API void pathlib_destroy(Path* path);
 /**
-* @brief checks whether a path exists
-*
-* @param path the path that it will check 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether a path exists
+ *
+ * @param path the path that it will check 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_exists(const Path* path);
 /**
-* @brief checks whether a path is a directory
-*
-* @param path the path that it will check 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether a path is a directory
+ *
+ * @param path the path that it will check 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_dir(const Path* path);
 /**
-* @brief checks whether a path is a file
-*
-* @param path the path that it will check 
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether a path is a file
+ *
+ * @param path the path that it will check 
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_file(const Path* path);
 /**
-* @brief checks whether a path is a symlink
-*
-* @param path the path that it will check 
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether a path is a symlink
+ *
+ * @param path the path that it will check 
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_symlink(const Path* path);
 /**
-* @brief checks whether the path points to a mount point
-*
-* @param path the path that it will check 
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether the path points to a mount point
+ *
+ * @param path the path that it will check 
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_mount(const Path* path);
 /**
-* @brief checks whether the path points to a block device
-*
-* @param path the path that it will check 
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether the path points to a block device
+ *
+ * @param path the path that it will check 
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_block_device(const Path* path);
 /**
-* @brief checks whether the path points to a character device
-*
-* @param path the path that it will check 
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether the path points to a character device
+ *
+ * @param path the path that it will check 
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_char_device(const Path* path);
 /**
-* @brief checks whether the path points to a socket
-*
-* @param path the path that it will check 
-* @warning path must not be `NULL`
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @note always returns false on windows
-*/
+ * @brief checks whether the path points to a socket
+ *
+ * @param path the path that it will check 
+ * @warning path must not be `NULL`
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @note always returns false on windows
+ */
 PATHLIB_API int pathlib_is_socket(const Path* path);
 /**
-* @brief checks whether a path points to a named pipe (FIFO)
-*
-* @param path the path that it will check 
-* @note sets pathlib_error to PATHLIB_OSERROR in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether a path points to a named pipe (FIFO)
+ *
+ * @param path the path that it will check 
+ * @note sets pathlib_error to PATHLIB_OSERROR in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_fifo(const Path* path);
 /**
-* @brief checks whether the path is absolute
-*
-* @param path the path that it will check 
-* @warning path must not be `NULL`
-*/
+ * @brief checks whether the path is absolute
+ *
+ * @param path the path that it will check 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_absolute(const Path* path);
 /**
-* @brief checks whether a path is relative to another
-*
-* @param path the base path
-* @param other the path that will be compared to param
-* @warning path and other must not be `NULL`
-*/
+ * @brief checks whether a path is relative to another
+ *
+ * @param path the base path
+ * @param other the path that will be compared to param
+ * @warning path and other must not be `NULL`
+ */
 PATHLIB_API int pathlib_is_relative(const Path* path, const Path* other);
 /**
-* @brief The last dot-separated portion of the final component, if any
-*
-* @param path the path that it will try to extract the suffix
-* @return the suffix, if any
-* @warning path must not be `NULL`
-*/
+ * @brief The last dot-separated portion of the final component, if any
+ *
+ * @param path the path that it will try to extract the suffix
+ * @return the suffix, if any
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API char* pathlib_suffix(const Path* path);
 /**
-* @brief A list of the path’s suffixes, if any
-*
-* attempts to extract the suffixes from a given path and return them.
-* the suffix_count parameter is nullable because suffixes[suffix_count] == NULL
-*
-* @param path the path that it will try to extract the suffixes
-* @param suffix_count the amount of suffixes it found
-* @return the suffixes, if any
-* @warning path must not be `NULL`
-*/
+ * @brief A list of the path’s suffixes, if any
+ *
+ * attempts to extract the suffixes from a given path and return them.
+ * the suffix_count parameter is nullable because suffixes[suffix_count] == NULL
+ *
+ * @param path the path that it will try to extract the suffixes
+ * @param suffix_count the amount of suffixes it found
+ * @return the suffixes, if any
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API char** pathlib_suffixes(const Path* path, PATHLIB_NULLABLE size_t* suffix_count);
 /**
-* @brief The final path component, without its suffix
-*
-* @param path the path that it will try to extract the suffix
-* @return the stem
-* @warning path must not be `NULL`
-*/
+ * @brief The final path component, without its suffix
+ *
+ * @param path the path that it will try to extract the suffix
+ * @return the stem
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API char* pathlib_stem(const Path* path);
 /**
-* @brief The logical parent of the path
-*
-* @param path the path
-* @return the logical parent
-* @warning path must not be `NULL`
-*/
+ * @brief The logical parent of the path
+ *
+ * @param path the path
+ * @return the logical parent
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API Path pathlib_parent(const Path* path);
 /**
-* @brief The logical parents of the path
-*
-* @param path the path
-* @return the logicals parent
-* @warning path must not be `NULL`
-*/
+ * @brief The logical parents of the path
+ *
+ * @param path the path
+ * @return the logicals parent
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API Paths pathlib_parents(const Path* path);
 /**
-* @brief a string representing the final path component
-*
-* @param path the path
-* @return the name
-* @warning path must not be `NULL`
-*/
+ * @brief a string representing the final path component
+ *
+ * @param path the path
+ * @return the name
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API const char* pathlib_name(const Path* path);
 /**
-* @brief retrieves every file inside the directory 
-*
-* @param path the path
-* @return the files
-* @warning path must not be `NULL`
-*/
+ * @brief retrieves every file inside the directory 
+ *
+ * @param path the path
+ * @return the files
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API Paths pathlib_listdir(const Path* path);
 /**
-* @brief joins a and b and creates a new path 
-*
-* @param pathA the first half of the new path
-* @param pathB the second half of the new path
-* @return the new path
-* @warning pathA and pathB must not be `NULL`
-*/
+ * @brief joins a and b and creates a new path 
+ *
+ * @param pathA the first half of the new path
+ * @param pathB the second half of the new path
+ * @return the new path
+ * @warning pathA and pathB must not be `NULL`
+ */
 PATHLIB_API Path pathlib_joinpath(const Path* pathA, const Path* pathB);
 /**
-* @brief deletes the file or symlink that the path points to
-*
-* @param path the path that it will delete
-* @return 1 on success and 0 on error
-* @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_NEXISTS in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief deletes the file or symlink that the path points to
+ *
+ * @param path the path that it will delete
+ * @return 1 on success and 0 on error
+ * @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_NEXISTS in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_unlink(const Path* path);
 /**
-* @brief deletes the directory that path points too
-*
-* @param path the path that it will delete
-* @param remove_contents whether to delete the contents of the directory
-* @return 1 on success and 0 on error
-* @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_NEXISTS in case of error 
-* @warning path must not be `NULL`
-*/
+ * @brief deletes the directory that path points too
+ *
+ * @param path the path that it will delete
+ * @param remove_contents whether to delete the contents of the directory
+ * @return 1 on success and 0 on error
+ * @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_NEXISTS in case of error 
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_rmdir(const Path* path, int remove_contents);
 /**
-* @brief creates the directory that path points too
-*
-* @param path the path that it will create
-* @return 1 on success and 0 on error
-* @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_EXISTS in case of error 
-* @note it creates the parents too if they dont exist
-* @warning path must not be `NULL`
-*/
+ * @brief creates the directory that path points too
+ *
+ * @param path the path that it will create
+ * @return 1 on success and 0 on error
+ * @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_EXISTS in case of error 
+ * @note it creates the parents too if they dont exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_mkdir(const Path* path);
 /**
-* @brief creates the file that the path points too
-*
-* @param path the path that it will create
-* @return 1 on success and 0 on error
-* @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_EXISTS in case of error 
-* @note it creates the parents too if they dont exist
-* @warning path must not be `NULL`
-*/
+ * @brief creates the file that the path points too
+ *
+ * @param path the path that it will create
+ * @return 1 on success and 0 on error
+ * @note sets pathlib_error to PATHLIB_OSERROR or PATHLIB_EXISTS in case of error 
+ * @note it creates the parents too if they dont exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_touch(const Path* path);
 /**
-* @brief it opens the file that the path points to
-*
-* @param path the path that it will attempt to open
-* @param mode the mode that it will pass to fopen
-* @return the file handle or NULL on error
-* @note it creates the file if it doesnt exist
-* @warning path must not be `NULL`
-*/
+ * @brief it opens the file that the path points to
+ *
+ * @param path the path that it will attempt to open
+ * @param mode the mode that it will pass to fopen
+ * @return the file handle or NULL on error
+ * @note it creates the file if it doesnt exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API FILE* pathlib_open(const Path* path, const char* mode);
 /**
-* @brief it reads the contents of the file that path points to
-*
-* @param path the path that it will attempt to open
-* @return the file handle or NULL on error
-* @note it doesnt create the file if it doesnt exist
-* @warning path must not be `NULL`
-*/
+ * @brief it reads the contents of the file that path points to
+ *
+ * @param path the path that it will attempt to open
+ * @return the file handle or NULL on error
+ * @note it doesnt create the file if it doesnt exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API char* pathlib_read_text(const Path* path);
 /**
-* @brief it reads the contents of the file that path points to
-*
-* @param path the path that it will attempt to open
-* @param byte_count the amount of bytes it read
-* @return the file handle or NULL on error
-* @note it doesnt create the file if it doesnt exist
-* @warning path must not be `NULL`
-*/
+ * @brief it reads the contents of the file that path points to
+ *
+ * @param path the path that it will attempt to open
+ * @param byte_count the amount of bytes it read
+ * @return the file handle or NULL on error
+ * @note it doesnt create the file if it doesnt exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API unsigned char* pathlib_read_bytes(const Path* path, size_t* byte_count);
 /**
-* @brief it writes text into the file that path points to
-*
-* @param path the path that it will write text into
-* @param text the text that it will write
-* @param text_size how many characters it will write
-* @return 1 on success and 0 on error
-* @note it creates the file if it doesnt exist
-* @warning path must not be `NULL`
-*/
+ * @brief it writes text into the file that path points to
+ *
+ * @param path the path that it will write text into
+ * @param text the text that it will write
+ * @param text_size how many characters it will write
+ * @return 1 on success and 0 on error
+ * @note it creates the file if it doesnt exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_write_text(const Path* path, const char* text, size_t text_size);
 /**
-* @brief it writes bytes into the file that path points to
-*
-* @param path the path that it will write bytes into
-* @param buff the buffer that it will write
-* @param buff_size how many bytes it will write
-* @return 1 on success and 0 on error
-* @note it creates the file if it doesnt exist
-* @warning path must not be `NULL`
-*/
+ * @brief it writes bytes into the file that path points to
+ *
+ * @param path the path that it will write bytes into
+ * @param buff the buffer that it will write
+ * @param buff_size how many bytes it will write
+ * @return 1 on success and 0 on error
+ * @note it creates the file if it doesnt exist
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API int pathlib_write_bytes(const Path* path, const unsigned char* buff, size_t buff_size);
 /**
-* @brief it creates a string that represents the path
-*
-* @param path the path 
-* @return the string representation of the path
-* @warning path must not be `NULL`
-*/
+ * @brief it creates a string that represents the path
+ *
+ * @param path the path 
+ * @return the string representation of the path
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API char* pathlib_to_str(const Path* path);
 /**
-* @brief it creates a string that represents the path and puts it into buffer
-*
-* @param path the path 
-* @param buffer the buffer that it will write the string into
-* @param buffer_size the capacity of the buffer
-* @return 1 on success and 0 on false
-* @warning path and buffer must not be `NULL`
-*/
+ * @brief it creates a string that represents the path and puts it into buffer
+ *
+ * @param path the path 
+ * @param buffer the buffer that it will write the string into
+ * @param buffer_size the capacity of the buffer
+ * @return 1 on success and 0 on false
+ * @warning path and buffer must not be `NULL`
+ */
 PATHLIB_API int pathlib_render_str_to_buffer(const Path* path, char* buffer, size_t buffer_size);
 /**
-* @brief it creates a hash for the input path
-*
-* @param path the path 
-* @return the final hash
-* @warning path must not be `NULL`
-*/
+ * @brief it creates a hash for the input path
+ *
+ * @param path the path 
+ * @return the final hash
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API unsigned long pathlib_hashfunc(const Path* path);
 /**
-* @brief it adds a new path to a Paths struct
-*
-* @param paths the struct that it will add the path
-* @param path the path that it will add to paths
-* @warning path must not be `NULL`
-*/
+ * @brief return names of files that match the pattern
+ *
+ * @param path the path that it will search
+ * @param pattern the pattern that will try to match
+ * @return the files that match the pattern inside the path directory
+ * @note pathlib_glob is not recursive and does not support `**\/`, for recursive globbing check @ref pathlib_rglob
+ * @note sets pathlib_error to PATHLIB_NEXISTS or PATHLIB_OSERROR
+ * @note on windows the result is not sorted
+ * @warning path and pattern must not be `NULL`
+ */
+Paths pathlib_glob(const Path* path, const char* pattern);
+/**
+ * @brief return names of files that match the pattern recursivly
+ *
+ * @param path the path that it will search
+ * @param pattern the pattern that will try to match
+ * @return the files that match the pattern inside the path directory
+ * @warning path and pattern must not be `NULL`
+ * @note sets pathlib_error to PATHLIB_NEXISTS or PATHLIB_OSERROR
+ * @note on windows the result is not sorted
+ */
+Paths pathlib_rglob(const Path* path, const char* pattern);
+/**
+ * @brief it adds a new path to a Paths struct
+ *
+ * @param paths the struct that it will add the path
+ * @param path the path that it will add to paths
+ * @warning path must not be `NULL`
+ */
 PATHLIB_API void pathlib_paths_add(Paths* paths, const Path path);
 /**
-* @brief it removes the i-th element from paths
-*
-* @param paths the struct that it will remove the element from
-* @param i the index of the element that it will delete
-* @warning paths must not be `NULL` and paths->size > i
-*/
+ * @brief it removes the i-th element from paths
+ *
+ * @param paths the struct that it will remove the element from
+ * @param i the index of the element that it will delete
+ * @warning paths must not be `NULL` and paths->size > i
+ */
 PATHLIB_API void pathlib_paths_pop(Paths* paths, size_t i);
 /**
-* @brief it deallocates the contents of paths->paths and zero it out
-*
-* @param paths the struct that it will clean up
-* @warning paths must not be `NULL`
-*/
+ * @brief it deallocates the contents of paths->paths and zero it out
+ *
+ * @param paths the struct that it will clean up
+ * @warning paths must not be `NULL`
+ */
 PATHLIB_API void pathlib_paths_free(Paths* paths);
 
 #endif /* _PATHLIB_C_H_ */
@@ -2172,6 +2200,426 @@ PATHLIB_API Paths pathlib_listdir(const Path* inpath) {
     pathlib_destroy(&path);
         
     return paths;
+}
+
+/* a slightly stripped down version of fnmatch from musl C stdlib */
+/* BEGIN OF https://github.com/kraj/musl/blob/eb4309b142bb7a8bdc839ef1faf18811b9ff31c8/src/regex/fnmatch.c */
+#define END 0
+#define UNMATCHABLE -2
+#define BRACKET -3
+#define QUESTION -4
+#define STAR -5
+#define	FNM_NOMATCH 1
+#define FNM_NOSYS   (-1)
+
+static wctype_t pathlib__wctype(const char *s) {
+   	int i;
+   	const char *p;
+   	/* order must match! */
+   	static const char names[] =
+  		"alnum\0" "alpha\0" "blank\0"
+  		"cntrl\0" "digit\0" "graph\0"
+  		"lower\0" "print\0" "punct\0"
+  		"space\0" "upper\0" "xdigit";
+   	for (i=1, p=names; *p; i++, p+=6)
+  		if (*s == *p && !strcmp(s, p))
+ 			return i;
+   	return 0;
+}
+
+static int pathlib__str_next(const char *str, size_t n, size_t *step) {
+   	if (!n) {
+  		*step = 0;
+  		return 0;
+   	}
+   	*step = 1;
+   	return str[0];
+}
+
+static int pathlib__pat_next(const char *pat, size_t m, size_t *step) {
+   	if (!m || !*pat) {
+  		*step = 0;
+  		return END;
+   	}
+   	*step = 1;
+   	if (pat[0]=='\\' && pat[1]) {
+  		*step = 2;
+  		pat++;
+  		goto escaped;
+   	}
+   	if (pat[0]=='[') {
+  		size_t k = 1;
+  		if (k<m) if (pat[k] == '^' || pat[k] == '!') k++;
+  		if (k<m) if (pat[k] == ']') k++;
+  		for (; k<m && pat[k] && pat[k]!=']'; k++) {
+ 			if (k+1<m && pat[k+1] && pat[k]=='[' && (pat[k+1]==':' || pat[k+1]=='.' || pat[k+1]=='=')) {
+				int z = pat[k+1];
+				k+=2;
+				if (k<m && pat[k]) k++;
+				while (k<m && pat[k] && (pat[k-1]!=z || pat[k]!=']')) k++;
+				if (k==m || !pat[k]) break;
+ 			}
+  		}
+  		if (k==m || !pat[k]) {
+ 			*step = 1;
+ 			return '[';
+  		}
+  		*step = k+1;
+  		return BRACKET;
+   	}
+   	if (pat[0] == '*')
+  		return STAR;
+   	if (pat[0] == '?')
+  		return QUESTION;
+escaped:
+   	return pat[0];
+}
+
+static int pathlib__match_bracket(const char *p, int k, int kfold) {
+   	wchar_t wc;
+   	int inv = 0;
+   	p++;
+   	if (*p=='^' || *p=='!') {
+  		inv = 1;
+  		p++;
+   	}
+   	if (*p==']') {
+  		if (k==']') return !inv;
+  		p++;
+   	} else if (*p=='-') {
+  		if (k=='-') return !inv;
+  		p++;
+   	}
+   	wc = p[-1];
+   	for (; *p != ']'; p++) {
+  		if (p[0]=='-' && p[1]!=']') {
+ 			wchar_t wc2;
+ 			int l = mbtowc(&wc2, p+1, 4);
+ 			if (l < 0) return 0;
+ 			if (wc <= wc2)
+				if ((unsigned)k-wc <= (unsigned)wc2-wc ||
+				(unsigned)kfold-wc <= (unsigned)wc2-wc)
+   					return !inv;
+ 			p += l-1;
+ 			continue;
+  		}
+  		if (p[0]=='[' && (p[1]==':' || p[1]=='.' || p[1]=='=')) {
+ 			const char *p0 = p+2;
+ 			int z = p[1];
+ 			p+=3;
+ 			while (p[-1]!=z || p[0]!=']') p++;
+ 			if (z == ':' && p-1-p0 < 16) {
+				char buf[16];
+				memcpy(buf, p0, p-1-p0);
+				buf[p-1-p0] = 0;
+				if (iswctype(k, pathlib__wctype(buf)) ||
+				    iswctype(kfold, pathlib__wctype(buf)))
+   					return !inv;
+ 			}
+ 			continue;
+  		}
+  		if ((unsigned char)*p < 128U) {
+ 			wc = (unsigned char)*p;
+  		} else {
+ 			int l = mbtowc(&wc, p, 4);
+ 			if (l < 0) return 0;
+ 			p += l-1;
+  		}
+  		if (wc==k || wc==kfold) return !inv;
+   	}
+   	return inv;
+}
+
+static int pathlib__fnmatch_internal(const char *pat, size_t m, const char *str, size_t n) {
+   	const char *p, *ptail, *endpat;
+   	const char *s, *stail, *endstr;
+   	size_t pinc, sinc, tailcnt=0;
+   	int c, k;
+
+   	for (;;) {
+  		switch ((c = pathlib__pat_next(pat, m, &pinc))) {
+  		case UNMATCHABLE:
+ 			return FNM_NOMATCH;
+  		case STAR:
+ 			pat++;
+ 			m--;
+ 			break;
+  		default:
+ 			k = pathlib__str_next(str, n, &sinc);
+ 			if (k <= 0)
+				return (c==END) ? 0 : FNM_NOMATCH;
+ 			str += sinc;
+ 			n -= sinc;
+ 			if (c == BRACKET) {
+				if (!pathlib__match_bracket(pat, k, k))
+   					return FNM_NOMATCH;
+ 			} else if (c != QUESTION && k != c && k != c) {
+				return FNM_NOMATCH;
+ 			}
+ 			pat+=pinc;
+ 			m-=pinc;
+ 			continue;
+  		}
+  		break;
+   	}
+
+   	/* Compute real pat length if it was initially unknown/-1 */
+   	m = strlen(pat);
+   	endpat = pat + m;
+
+   	/* Find the last * in pat and count chars needed after it */
+   	for (p=ptail=pat; p<endpat; p+=pinc) {
+  		switch (pathlib__pat_next(p, endpat-p, &pinc)) {
+  		case UNMATCHABLE:
+ 			return FNM_NOMATCH;
+  		case STAR:
+ 			tailcnt=0;
+ 			ptail = p+1;
+ 			break;
+  		default:
+ 			tailcnt++;
+ 			break;
+  		}
+   	}
+
+   	/* Past this point we need not check for UNMATCHABLE in pat,
+  	 * because all of pat has already been parsed once. */
+
+   	/* Compute real str length if it was initially unknown/-1 */
+   	n = strlen(str);
+   	endstr = str + n;
+   	if (n < tailcnt) return FNM_NOMATCH;
+
+   	/* Find the final tailcnt chars of str, accounting for UTF-8.
+  	 * On illegal sequences we may get it wrong, but in that case
+  	 * we necessarily have a matching failure anyway. */
+   	for (s=endstr; s>str && tailcnt; tailcnt--) {
+  		if ((unsigned char)s[-1] < 128U || MB_CUR_MAX==1) s--;
+  		else while ((unsigned char)*--s-0x80U<0x40 && s>str);
+   	}
+   	if (tailcnt) return FNM_NOMATCH;
+   	stail = s;
+
+   	/* Check that the pat and str tails match */
+   	p = ptail;
+   	for (;;) {
+  		c = pathlib__pat_next(p, endpat-p, &pinc);
+  		p += pinc;
+  		if ((k = pathlib__str_next(s, endstr-s, &sinc)) <= 0) {
+ 			if (c != END) return FNM_NOMATCH;
+ 			break;
+  		}
+  		s += sinc;
+  		if (c == BRACKET) {
+ 			if (!pathlib__match_bracket(p-pinc, k, k))
+				return FNM_NOMATCH;
+  		} else if (c != QUESTION && k != c && k != c) {
+ 			return FNM_NOMATCH;
+  		}
+   	}
+
+   	/* We're all done with the tails now, so throw them out */
+   	endstr = stail;
+   	endpat = ptail;
+
+   	/* Match pattern components until there are none left */
+   	while (pat<endpat) {
+  		p = pat;
+  		s = str;
+  		for (;;) {
+ 			c = pathlib__pat_next(p, endpat-p, &pinc);
+ 			p += pinc;
+ 			/* Encountering * completes/commits a component */
+ 			if (c == STAR) {
+				pat = p;
+				str = s;
+				break;
+ 			}
+ 			k = pathlib__str_next(s, endstr-s, &sinc);
+ 			if (!k)
+				return FNM_NOMATCH;
+ 			if (c == BRACKET) {
+				if (!pathlib__match_bracket(p-pinc, k, k))
+   					break;
+ 			} else if (c != QUESTION && k != c && k != c) {
+				break;
+ 			}
+ 			s += sinc;
+  		}
+  		if (c == STAR) continue;
+  		/* If we failed, advance str, by 1 char if it's a valid
+ 		 * char, or past all invalid bytes otherwise. */
+  		k = pathlib__str_next(str, endstr-str, &sinc);
+  		if (k > 0) str += sinc;
+  		else for (str++; pathlib__str_next(str, endstr-str, &sinc)<0; str++);
+   	}
+
+   	return 0;
+}
+
+int pathlib__fnmatch(const char *pat, const char *str) {
+   	return pathlib__fnmatch_internal(pat, -1, str, -1);
+}
+
+#undef END
+#undef UNMATCHABLE
+#undef BRACKET
+#undef QUESTION
+#undef STAR
+#undef FNM_NOMATCH
+#undef FNM_NOSYS
+
+/* END OF https://github.com/kraj/musl/blob/eb4309b142bb7a8bdc839ef1faf18811b9ff31c8/src/regex/fnmatch.c */
+
+static int pathlib__recursive_glob(char* base_path, const char* pattern, int recursive, Paths* results) {
+    char fullpath[PATHLIB_MAX_PATH];
+
+    #if defined(_WIN32)
+        WIN32_FIND_DATA find_data;
+        HANDLE hFind;
+        char search_path[PATHLIB_MAX_PATH];
+    
+        if (snprintf(search_path, sizeof(search_path), "%s\\*", base_path) < 0) {
+            return 0;
+        }
+    
+        hFind = FindFirstFile(search_path, &find_data);
+        if (hFind == INVALID_HANDLE_VALUE) {
+            pathlib_print_os_error("FindFirstFile", search_path);
+            pathlib_error = PATHLIB_OSERROR;
+            return 0;
+        }
+    
+        do {
+            const char* name = find_data.cFileName;
+            
+            if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+                continue;
+            }
+    
+            if (snprintf(fullpath, sizeof(fullpath), "%s\\%s", base_path, name) < 0) {
+                continue;
+            }
+
+            if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                if (recursive) {
+                    if (!pathlib__recursive_glob(fullpath, pattern, recursive, results)) {
+                        FindClose(hFind);
+                        return 0;
+                    }
+                }
+                continue;
+            }
+    
+            if (pathlib__fnmatch(pattern, name) == 0) {
+                pathlib_paths_add(results, pathlib_from_str(fullpath));
+            }
+    
+        } while (FindNextFile(hFind, &find_data) != 0);
+    
+        FindClose(hFind);
+    #else /* _WIN32 */
+        DIR* dir;
+        struct dirent* entry;
+        struct stat path_stat;
+    
+        dir = opendir(base_path);
+        if (dir == NULL) {
+            pathlib_print_os_error("opendir", base_path);
+            pathlib_error = PATHLIB_OSERROR;
+            return 0;
+        }
+    
+        while ((entry = readdir(dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+    
+            if (snprintf(fullpath, sizeof(fullpath), "%s/%s", base_path, entry->d_name) < 0) {
+                continue;
+            }
+    
+            if (stat(fullpath, &path_stat) != 0) {
+                continue;
+            }
+    
+            if (S_ISDIR(path_stat.st_mode)) {
+                if (recursive) {
+                    if (!pathlib__recursive_glob(fullpath, pattern, recursive, results)) {
+                        closedir(dir);
+                        return 0;
+                    }
+                }
+                continue;
+            }
+    
+            if (pathlib__fnmatch(pattern, entry->d_name) == 0) {
+                pathlib_paths_add(results, pathlib_from_str(fullpath));
+            }
+        }
+    
+        closedir(dir);
+    #endif /*_WIN32 */
+
+    return 1;
+}
+
+Paths pathlib_glob(const Path* path, const char* pattern) {
+    char fullpath[PATHLIB_MAX_PATH];
+    Paths results;
+    results.paths = NULL;
+    results.size = 0;
+    results.capacity = 0;
+    
+    PATHLIB_ASSERT(path);
+    PATHLIB_ASSERT(pattern);
+    
+    pathlib_error = PATHLIB_NONE;
+    
+    if (!pathlib_is_dir(path)) {
+        pathlib_error = PATHLIB_NEXISTS;
+        return results;
+    }
+    
+    if (!pathlib_render_str_to_buffer(path, fullpath, PATHLIB_ARRSIZE(fullpath))) {
+        pathlib_error = PATHLIB_NEXISTS;
+        return results;
+    }
+    
+    if (!pathlib__recursive_glob(fullpath, pattern, 0, &results)) {
+        pathlib_paths_free(&results);
+    }
+
+    return results;
+}
+
+Paths pathlib_rglob(const Path* path, const char* pattern) {
+    char fullpath[PATHLIB_MAX_PATH];
+    Paths results;
+    results.paths = NULL;
+    results.size = 0;
+    results.capacity = 0;
+    
+    PATHLIB_ASSERT(path);
+    PATHLIB_ASSERT(pattern);
+    
+    pathlib_error = PATHLIB_NONE;
+    
+    if (!pathlib_is_dir(path)) {
+        pathlib_error = PATHLIB_NEXISTS;
+        return results;
+    }
+    
+    if (!pathlib_render_str_to_buffer(path, fullpath, PATHLIB_ARRSIZE(fullpath))) {
+        pathlib_error = PATHLIB_NEXISTS;
+        return results;
+    }
+    
+    if (!pathlib__recursive_glob(fullpath, pattern, 1, &results)) {
+        pathlib_paths_free(&results);
+    }
+
+    return results;
 }
 
 #endif /* PATHLIB_IMPLEMENTATION */
