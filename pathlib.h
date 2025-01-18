@@ -325,6 +325,14 @@ PATHLIB_API char* pathlib_suffix(const Path* path);
  */
 PATHLIB_API char** pathlib_suffixes(const Path* path, PATHLIB_NULLABLE size_t* suffix_count);
 /**
+ * @brief it changes the suffix of the path, if there is none then it is added
+ *
+ * @param path the path that will modify
+ * @param suffix the suffix that it will add
+ * @warning path and suffix must not be `NULL`
+ */
+PATHLIB_API void pathlib_with_suffix(Path* path, const char* suffix);
+/**
  * @brief The final path component, without its suffix
  *
  * @param path the path that it will try to extract the suffix
@@ -497,10 +505,10 @@ PATHLIB_API unsigned long pathlib_hashfunc(const Path* path);
  * @return the files that match the pattern inside the path directory
  * @note pathlib_glob is not recursive and does not support `**\/`, for recursive globbing check @ref pathlib_rglob
  * @note sets pathlib_error to PATHLIB_NEXISTS or PATHLIB_OSERROR
- * @note on windows the result is not sorted
+ * @note they results are not sorted
  * @warning path and pattern must not be `NULL`
  */
-Paths pathlib_glob(const Path* path, const char* pattern);
+PATHLIB_API Paths pathlib_glob(const Path* path, const char* pattern);
 /**
  * @brief return names of files that match the pattern recursivly
  *
@@ -509,9 +517,9 @@ Paths pathlib_glob(const Path* path, const char* pattern);
  * @return the files that match the pattern inside the path directory
  * @warning path and pattern must not be `NULL`
  * @note sets pathlib_error to PATHLIB_NEXISTS or PATHLIB_OSERROR
- * @note on windows the result is not sorted
+ * @note they results are not sorted
  */
-Paths pathlib_rglob(const Path* path, const char* pattern);
+PATHLIB_API Paths pathlib_rglob(const Path* path, const char* pattern);
 /**
  * @brief it adds a new path to a Paths struct
  *
@@ -918,6 +926,49 @@ PATHLIB_API char** pathlib_suffixes(const Path* path, PATHLIB_NULLABLE size_t* s
     }
     
     return suffixes;
+}
+
+PATHLIB_API void pathlib_with_suffix(Path* path, const char* new_suffix) {
+    size_t last_part_size, suffix_size;
+    const char* last_part;
+    char* suffix;
+    char* new_last_part;
+
+    PATHLIB_ASSERT(path);
+
+    if (path->size == 0) {
+        pathlib_add_part(path, new_suffix);
+        return;
+    }
+    last_part = path->parts[path->size-1];
+    last_part_size = strlen(last_part);
+    suffix_size = 0;
+
+    while (last_part_size > suffix_size) {
+        if (last_part[last_part_size - suffix_size] == '.') break;
+        suffix_size++;
+    }
+
+    if (*(last_part + (last_part_size - suffix_size)) != '.') {
+        new_last_part = pathlib__malloc(last_part_size + strlen(new_suffix) + 1);
+        memcpy(new_last_part, last_part, last_part_size);
+        memcpy(new_last_part + last_part_size, new_suffix, strlen(new_suffix));
+        
+        new_last_part[last_part_size + strlen(suffix)] = 0;
+        
+        path->parts[path->size-1] = new_last_part;
+        return;
+    }
+    
+    new_last_part = pathlib__malloc(last_part_size - suffix_size + strlen(new_suffix));
+    
+    memcpy(new_last_part, last_part, last_part_size - suffix_size);
+    memcpy(new_last_part + last_part_size - suffix_size, new_suffix, strlen(new_suffix));
+    
+    new_last_part[last_part_size - suffix_size + strlen(new_suffix)] = 0;
+    
+    path->parts[path->size-1] = new_last_part;
+    return;
 }
 
 PATHLIB_API char* pathlib_stem(const Path* path) {
@@ -2564,7 +2615,7 @@ static int pathlib__recursive_glob(char* base_path, const char* pattern, int rec
     return 1;
 }
 
-Paths pathlib_glob(const Path* path, const char* pattern) {
+PATHLIB_API Paths pathlib_glob(const Path* path, const char* pattern) {
     char fullpath[PATHLIB_MAX_PATH];
     Paths results;
     results.paths = NULL;
@@ -2593,7 +2644,7 @@ Paths pathlib_glob(const Path* path, const char* pattern) {
     return results;
 }
 
-Paths pathlib_rglob(const Path* path, const char* pattern) {
+PATHLIB_API Paths pathlib_rglob(const Path* path, const char* pattern) {
     char fullpath[PATHLIB_MAX_PATH];
     Paths results;
     results.paths = NULL;
